@@ -9,14 +9,14 @@ from collections import deque
 # --- KONFIGURATION ---
 SAMPLE_RATE = 44100  # Weniger reicht oft für Chroma und spart Rechenleistung
 BLOCK_SIZE = 4096     # Größe des Audio-Schnipsels (Latzenz vs. Genauigkeit)
-SEARCH_WINDOW = 80    # Suchradius: Wir suchen nur +/- 80 Frames um die letzte Position
+SEARCH_WINDOW = 300    # Suchradius: Wir suchen nur +/- 80 Frames um die letzte Position
 HOP_LENGTH = 512     # Wie viel wir im Fenster weiter springen (Overlap)
-DAMPING_FACTOR = 0.96  # Dämpfungsfaktor für alte Kosten
-WAIT_PENALTY = 0.3    # Strafe fürs Stehenbleiben
-SKIP_PENALTY = 0.2      # Strafe für zu weite - erstmal hohe Strafe
+DAMPING_FACTOR = 0.99  # Dämpfungsfaktor für alte Kosten
+WAIT_PENALTY = 0.6    # Strafe fürs Stehenbleiben
+SKIP_PENALTY = 0.9      # Strafe für zu weite - erstmal hohe Strafe
 BPM = 40
 BEATS_PER_MEASURE = 4
-SMOOTHING_WINDOW = 5 # Anzahl Frames für Moving Average (1 = aus)
+SMOOTHING_WINDOW = 15 # Anzahl Frames für Moving Average (1 = aus)
 # ----------------------
 
 def load_h_file_chroma(filename):
@@ -208,87 +208,99 @@ def calculate_current_measure(frame_index, sr, hop_length, bpm, beats_per_bar):
     
     return measure, beat_in_measure
 
-# --- MAIN LOOP ---
+# --- NEUE HILFSKLASSE FÜR RINGBUFFER ---
+class AudioRingBuffer:
+    def __init__(self, size):
+        self.size = size
+        self.buffer = np.zeros(size, dtype=np.float32)
+    
+    def append(self, new_data):
+        # Verschiebe Daten nach links: Das Alte fällt raus
+        # new_data Länge muss HOP_LENGTH sein
+        n = len(new_data)
+        self.buffer = np.roll(self.buffer, -n)
+        self.buffer[-n:] = new_data # Neue Daten ans Ende schreiben
+        
+    def get(self):
+        return self.buffer
+
+# --- MAIN LOOP (Korrigiert) ---
 
 def main():
-    # --- 1. Audio-Geräte Check ---
-    print("\n--- Verfügbare Audio-Geräte ---")
+    print("\n--- Audio-Geräte ---")
     print(sd.query_devices())
-    # Falls das falsche Mikro gewählt wird, ändere 'device=X' im InputStream unten!
-    print("-------------------------------\n")
+    print("--------------------\n")
 
-    # --- 2. Referenz laden ---
     try:
         ref_chroma = load_h_file_chroma("ScoreData.h")
         n_frames = ref_chroma.shape[1]
-        print(f"Referenz geladen: {n_frames} Frames.")
     except Exception as e:
-        print(f"Fehler beim Laden: {e}")
+        print(f"Fehler: {e}")
         return
 
-    # ODTW Initialisieren
     dtw_engine = StandardODTW(ref_chroma)
     
-    # Parameter Setup für saubere Anzeige
+    # RINGBUFFER INITIALISIEREN
+    # Der Buffer muss so groß sein wie die FFT braucht (BLOCK_SIZE = 4096)
+    ring_buffer = AudioRingBuffer(BLOCK_SIZE)
+    
     print(f"Starte Tracking bei {BPM} BPM...")
-    print("Format: [Takt . Schlag] (Energie-Level) | Fortschrittsbalken")
+    print(f"INTERNER TAKT: Alle {HOP_LENGTH/SAMPLE_RATE*1000:.1f} ms ein Update.")
 
-    # --- 3. Live Loop ---
     try:
-        # device=1  <-- HIER KANNST DU DEN INDEX ÄNDERN, falls das falsche Mikro an ist
-        with sd.InputStream(channels=1, samplerate=SAMPLE_RATE, blocksize=BLOCK_SIZE) as stream:
+        # WICHTIG: Wir lesen jetzt nur HOP_LENGTH (512) Samples pro Schritt!
+        with sd.InputStream(channels=1, samplerate=SAMPLE_RATE, blocksize=HOP_LENGTH) as stream:
             while True:
-                # A: Audio lesen
-                audio_chunk, overflow = stream.read(BLOCK_SIZE)
-                audio_data = audio_chunk[:, 0] # Mono
+                # 1. Nur kleine Menge lesen (512 Samples -> 11ms)
+                new_chunk, overflow = stream.read(HOP_LENGTH)
+                new_data = new_chunk[:, 0] # Mono
 
-                # B: Energie berechnen (RMS) für Debugging
-                # Einfache Formel: Wurzel aus dem Durchschnitt der Quadrate
-                rms = np.sqrt(np.mean(audio_data**2))
+                # 2. In den Ringbuffer schieben (damit wir 4096 für die FFT haben)
+                ring_buffer.append(new_data)
                 
-                # C: Wenn Energie sehr niedrig ist -> Warnung (Stille)
+                # 3. FFT auf dem vollen 4096 Buffer machen
+                audio_for_fft = ring_buffer.get()
+
+                # Energie Check
+                rms = np.sqrt(np.mean(audio_for_fft**2))
                 energy_marker = " "
-                if rms > 0.1: energy_marker = "!!!" # Laut
-                elif rms > 0.01: energy_marker = "*" # Signal da
-                elif rms < 0.001: energy_marker = "_" # Stille
+                if rms > 0.1: energy_marker = "!!!" 
+                elif rms > 0.01: energy_marker = "*" 
+                elif rms < 0.001: energy_marker = "_" 
                 
-                # D: Chroma berechnen & ODTW Schritt
-                # Wir müssen HOP_LENGTH an librosa übergeben, damit es konsistent ist
-                # D: Chroma berechnen & ODTW Schritt
-                # tuning=0 verhindert die Warnung bei Stille
+                # 4. Chroma berechnen
+                # WICHTIG: n_fft=BLOCK_SIZE. Wir übergeben genau BLOCK_SIZE Daten.
+                # hop_length ist hier egal, da wir nur 1 Frame berechnen wollen.
                 chroma_stft = librosa.feature.chroma_stft(
-                    y=audio_data, 
+                    y=audio_for_fft, 
                     sr=SAMPLE_RATE, 
                     n_fft=BLOCK_SIZE, 
-                    hop_length=HOP_LENGTH+1, 
+                    hop_length=BLOCK_SIZE+1, # Trick: Nur 1 Frame berechnen
                     center=False, 
                     tuning=0
-                )# Mittelwert über das Fenster (falls librosa mehr als 1 Frame zurückgibt)
+                )
+                
+                # Das Ergebnis ist (12, 1) -> Flatten zu (12,)
                 live_vec = np.mean(chroma_stft, axis=1)
                 
+                # 5. ODTW Schritt (jetzt läuft er mit ca. 86 Hz!)
                 pos_index, current_cost = dtw_engine.step(live_vec)
                 
-                # E: Takt Berechnung
                 measure, beat = calculate_current_measure(pos_index, SAMPLE_RATE, HOP_LENGTH, BPM, BEATS_PER_MEASURE)
                 
-                # F: Visualisierung
-                # Um die Konsole nicht zu fluten, nutzen wir \r (Carriage Return)
-                progress_percent = (pos_index / n_frames) * 100
-                bar_len = 30
-                filled = int(bar_len * pos_index // n_frames)
-                bar = '█' * filled + '-' * (bar_len - filled)
-                
-                # Anzeige:
-                # Takt.Schlag | Energie-Wert (Balken) | Fortschritt
-                print(f"\rTakt {measure:03d}.{beat} | Cost: {current_cost:6.2f} | Mic: {rms:.4f} [{energy_marker}] | {bar} {progress_percent:.1f}%", end="")
+                # Visualisierung (etwas bremsen, sonst flimmert die Konsole)
+                # Wir geben nur jeden 10. Frame aus
+                if pos_index % 2 == 0: 
+                    progress_percent = (pos_index / n_frames) * 100
+                    bar_len = 30
+                    filled = int(bar_len * pos_index // n_frames)
+                    bar = '█' * filled + '-' * (bar_len - filled)
+                    print(f"\rTakt {measure:03d}.{beat} | Cost: {current_cost:6.2f} | {bar} {progress_percent:.1f}%", end="")
 
     except KeyboardInterrupt:
         print("\nBeendet.")
     except Exception as e:
-        print(f"\nEin Fehler ist aufgetreten: {e}")
+        print(f"\nFehler: {e}")
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\nBeendet.")
+    main()

@@ -10,7 +10,7 @@ import numpy as np
 SOUNDFONT_PATH = "/Users/samuelgeffert/Desktop/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/MuseScore_General.sf2" 
 SAMPLE_RATE = 44100
 FFT_SIZE = 4096
-HOP_LENGTH = 2048 # 46.4 ms bei 44100 Hz
+HOP_LENGTH = 512
 
 INSTRUMENTS = {
     "piano": 0, "violin": 40, "viola": 41, "cello": 42, 
