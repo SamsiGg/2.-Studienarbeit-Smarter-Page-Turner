@@ -10,7 +10,6 @@ Offline Programme/
 ├── PdfToChroma/              # PDF → Chroma (via OMR)
 ├── DTW_Studies/              # DTW-Algorithmus Tests & Entwicklung
 │   ├── ODTW_Python/          # Online-DTW Implementierung ✨
-│   ├── AudioToChroma/        # Live-Audio → Chroma
 │   └── DTW-Simulationen.ipynb
 ├── data/                     # Zentrale Daten (NEU!)
 │   ├── soundfonts/           # MuseScore_General.sf2 (206 MB)
@@ -38,11 +37,13 @@ python pdf_to_chroma.py noten.pdf --bpm 40 --instrument violin
 # → PDF wird via OMR in MusicXML konvertiert, dann Chroma berechnet
 ```
 
-### 2. **Live-Audio → Chroma**
+### 2. **Live-Audio → Chroma** (Optional - für Verifikation)
 ```bash
-cd DTW_Studies/AudioToChroma
-python AudioToChroma.py ../data/audio/Fiocco.wav --format npy
-# → Erstellt Fiocco_chroma.npy
+# Wird automatisch von test_robustness.py erstellt!
+# Beim Laden einer .wav Datei wird automatisch eine .npy generiert
+cd DTW_Studies/ODTW_Python
+python test_robustness.py
+# → Wähle WAV-Input → Erstellt automatisch .npy Datei
 ```
 
 ### 3. **DTW Testing**
@@ -95,7 +96,7 @@ Wie MusescoreToChroma, aber mit PDF-Input via OMR (Optical Music Recognition):
 ### DTW_Studies
 Entwicklung und Testing des Online-DTW-Algorithmus:
 - **ODTW_Python/**: Python-Prototyp mit umfangreichen Tests
-- **AudioToChroma/**: Extrahiert Chroma aus Live-Aufnahmen
+  - Integrierte Audio→Chroma Extraktion mit automatischer .npy Speicherung
 - **DTW-Simulationen.ipynb**: Jupyter Notebook für Visualisierungen
 
 ## ⚠️ Bekannte Issues

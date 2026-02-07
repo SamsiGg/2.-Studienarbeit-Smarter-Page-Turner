@@ -6,9 +6,14 @@ Testet die Robustheit des Online-DTW-Algorithmus gegen:
 - Audio-Rauschen (Noise)
 - Verschiedene Input-Formate (.wav Audio oder .npy Chroma)
 
+Features:
+- Automatisches Speichern von .npy Dateien beim WAV-Laden
+- Ermöglicht Verifikation mit audio_generator.py
+
 Author: Samuel Geffert
 """
 
+import os
 import numpy as np
 import librosa
 import matplotlib.pyplot as plt
@@ -45,14 +50,35 @@ def stretch_chroma(chroma, speed_factor):
     zoom_factor = 1 / speed_factor
     return zoom(chroma, (1, zoom_factor), order=1)
 
-def load_chroma_from_wav(wav_file):
-    """Lädt Audio und extrahiert Chroma-Features"""
+def load_chroma_from_wav(wav_file, save_npy=True):
+    """
+    Lädt Audio und extrahiert Chroma-Features.
+    Speichert optional als .npy für spätere Verwendung/Verifikation.
+    """
     print(f"Lade WAV: {wav_file}...")
-    y, sr = librosa.load(wav_file, sr=SAMPLE_RATE)
-    chroma = librosa.feature.chroma_stft(
-        y=y, sr=sr, n_fft=4096, hop_length=HOP_LENGTH, tuning=0
+
+    # Audio laden
+    y, sr = librosa.load(wav_file, sr=SAMPLE_RATE, mono=True)
+
+    # Chroma berechnen
+    chroma_raw = librosa.feature.chroma_stft(
+        y=y, sr=sr, n_fft=4096, hop_length=HOP_LENGTH, tuning=0, n_chroma=12
     )
-    return chroma
+
+    # Optional: Als .npy speichern (für Verifikation mit audio_generator)
+    if save_npy:
+        # Transponieren und L2-Normalisieren (wie AudioToChroma.py)
+        chroma_steps = chroma_raw.T  # [12, Zeit] → [Zeit, 12]
+        norms = np.linalg.norm(chroma_steps, axis=1, keepdims=True)
+        chroma_l2 = chroma_steps / (norms + 1e-9)
+
+        # Speichern
+        base_name = os.path.splitext(wav_file)[0]
+        npy_file = base_name + "_chroma.npy"
+        np.save(npy_file, chroma_l2)
+        print(f"💾 Chroma als .npy gespeichert: {npy_file}")
+
+    return chroma_raw
 
 def load_chroma_from_npy(npy_file):
     """Lädt vorberechnete Chroma-Daten aus .npy"""

@@ -40,7 +40,6 @@ Der Smarter Page Turner ist ein Echtzeit-System, das die gespielte Musik eines M
 │   ├── PdfToChroma/             #   - PDF → Chroma (via OMR)
 │   ├── DTW_Studies/             #   - DTW-Algorithmus Tests
 │   │   ├── ODTW_Python/         #   - Python-Prototyp & Parameter-Tuning
-│   │   ├── AudioToChroma/       #   - Live-Audio → Chroma
 │   │   └── DTW-Simulationen.ipynb
 │   ├── data/                    #   - Zentrale Daten
 │   │   ├── soundfonts/          #   - MuseScore_General.sf2
