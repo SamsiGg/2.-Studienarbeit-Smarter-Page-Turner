@@ -1,6 +1,52 @@
-Offline Programme/.venv/
-Offline Programme/MuseScore_General.sf2
-Offline Programme/MusescoreToChroma/Fiocco.wav
-Offline Programme/MusescoreToChroma/Fiocco-Live (40bpm).wav
-Offline Programme/DTW_Studies/AudioToChroma/Fiocco-Live (40bpm)_chroma.wav
-Offline Programme/DTW_Studies/ODTW_Python/dominant_tone_melody.wav
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Large Audio/Data files (stored in data/)
+Offline Programme/data/audio/*.wav
+Offline Programme/data/soundfonts/*.sf2
+*.wav
+!Offline Programme/data/audio/.gitkeep
+
+# Generated files
+Offline Programme/data/generated/*.h
+Offline Programme/data/generated/*.mid
+
+# Jupyter
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Logs
+*.log
+
+# Build artifacts
+*.o
+*.a
+*.elf
+*.hex
+*.bin
