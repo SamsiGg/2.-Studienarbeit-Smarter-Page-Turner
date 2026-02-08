@@ -4,11 +4,11 @@ ODTW Robustness Testing
 Testet die Robustheit des Online-DTW-Algorithmus gegen:
 - Tempo-Variationen (Speed Factors)
 - Audio-Rauschen (Noise)
-- Verschiedene Input-Formate (.wav Audio oder .npy Chroma)
 
 Features:
-- Automatisches Speichern von .npy Dateien beim WAV-Laden
-- Ermöglicht Verifikation mit audio_generator.py
+- Lädt Audio von WAV (wie im echten Teensy)
+- Automatisches Speichern von .npy Dateien für Verifikation
+- Debug-Analyse mit Tracking Position und Globalen Kosten
 
 Author: Samuel Geffert
 """
@@ -24,13 +24,24 @@ from dtw_engine import StandardODTW, DebugODTW, load_h_file_chroma
 # --- KONFIGURATION ---
 SCORE_FILE = "data/ScoreData.h"
 LIVE_NPY_FILE = "data/Fiocco-Live (40bpm)_chroma.npy"
-LIVE_WAV_FILE = "/Users/samuelgeffert/Desktop/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/MusescoreToChroma/Fiocco.wav"
+LIVE_WAV_FILE = "/Users/samuelgeffert/Desktop/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/data/audio/Fiocco-Live (40bpm).wav"
+NPY_OUTPUT_DIR = "../data/generated"  # NPY-Dateien werden hier gespeichert
 
 # Musikalische Parameter
 SAMPLE_RATE = 44100
 HOP_LENGTH = 512
 BPM = 40
 BEATS_PER_MEASURE = 4
+
+# Test-Szenarien (Tempo & Noise)
+TEST_SCENARIOS = [
+    (1.0, 0.05, 'green', 'Normal (1.0x, wenig Noise)'),
+    (1.3, 0.3, 'red', 'Schnell (1.3x, viel Noise)'),
+    (0.7, 0.3, 'blue', 'Langsam (0.7x, viel Noise)')
+]
+# Format: (speed_factor, noise_level, color, label)
+# speed_factor: 1.0 = normal, >1.0 = schneller, <1.0 = langsamer
+# noise_level: 0.0 = kein Noise, 0.3 = viel Noise
 
 # --- HELPER FUNCTIONS ---
 
@@ -72,9 +83,14 @@ def load_chroma_from_wav(wav_file, save_npy=True):
         norms = np.linalg.norm(chroma_steps, axis=1, keepdims=True)
         chroma_l2 = chroma_steps / (norms + 1e-9)
 
-        # Speichern
-        base_name = os.path.splitext(wav_file)[0]
-        npy_file = base_name + "_chroma.npy"
+        # Speichern in data/generated/
+        base_name = os.path.basename(wav_file)
+        name_without_ext = os.path.splitext(base_name)[0]
+        npy_file = os.path.join(NPY_OUTPUT_DIR, name_without_ext + "_chroma.npy")
+
+        # Stelle sicher, dass der Ordner existiert
+        os.makedirs(NPY_OUTPUT_DIR, exist_ok=True)
+
         np.save(npy_file, chroma_l2)
         print(f"💾 Chroma als .npy gespeichert: {npy_file}")
 
@@ -164,71 +180,21 @@ def run_simulation_debug(ref_chroma, live_base, speed, noise, label):
 
 # --- PLOTTING FUNCTIONS ---
 
-def plot_tracking_comparison(ref_chroma, live_base, input_type="npy"):
+def plot_analysis(ref_chroma, live_base):
     """
-    Plottet Tracking-Pfade für verschiedene Tempo/Noise-Kombinationen
-    """
-    ref_frames = ref_chroma.shape[1]
-    total_measures_score = frames_to_measures(ref_frames)
-
-    print(f"\nLänge der Partitur: {ref_frames} Frames = {total_measures_score:.2f} Takte")
-
-    plt.figure(figsize=(10, 8))
-
-    # Szenarien
-    scenarios = [
-        (1.0, 0.0, 'green', 'Normal (1.0x, kein Noise)', '-'),
-        (1.2, 0.2, 'red', 'Schnell (1.2x) + Noise', '--'),
-        (0.8, 0.2, 'blue', 'Langsam (0.8x) + Noise', ':'),
-    ]
-
-    for speed, noise, color, label, style in scenarios:
-        positions, _, n_input = run_simulation_standard(
-            ref_chroma, live_base, speed, noise, label
-        )
-
-        # X-Achse: Normiert auf Taktlänge
-        x_axis = np.linspace(0, total_measures_score, n_input)
-
-        # Y-Achse: Erkannte Position in Takten
-        y_axis = [frames_to_measures(p) for p in positions]
-
-        plt.plot(x_axis, y_axis, label=label, color=color,
-                linestyle=style, linewidth=2)
-
-    # Ideale Diagonale
-    plt.plot([0, total_measures_score], [0, total_measures_score],
-            'k-', alpha=0.3, label="Ideal")
-
-    plt.title(f"ODTW Tracking Robustheit ({input_type.upper()} Input)\nBPM: {BPM}")
-    plt.xlabel("Fortschritt im Input (Takte)")
-    plt.ylabel("Erkannte Position (Takte in Partitur)")
-    plt.axis('equal')
-    plt.legend()
-    plt.grid(True, which='both', linestyle='--', alpha=0.7)
-    plt.tight_layout()
-    plt.show()
-
-def plot_cost_analysis(ref_chroma, live_base):
-    """
-    Plottet detaillierte Kosten-Analyse mit drei Subplots:
+    Plottet detaillierte Debug-Analyse mit zwei Subplots:
     1. Tracking Position
-    2. Globale Kosten (Raw)
-    3. Globale Kosten (Moving Average)
-    """
-    scenarios = [
-        (1.0, 0.05, 'green', 'Normal (1.0x, wenig Noise)'),
-        (1.3, 0.3, 'red', 'Schnell (1.3x, viel Noise)'),
-        (0.7, 0.3, 'blue', 'Langsam (0.7x, viel Noise)')
-    ]
+    2. Globale Kosten (Moving Average)
 
-    fig, (ax_path, ax_global, ax_avg) = plt.subplots(3, 1, figsize=(12, 12))
+    Nutzt die globalen TEST_SCENARIOS für Tempo/Noise-Kombinationen.
+    """
+    fig, (ax_path, ax_avg) = plt.subplots(2, 1, figsize=(12, 8))
     plt.subplots_adjust(hspace=0.4)
 
     ref_len = ref_chroma.shape[1]
     WINDOW_SIZE = 300
 
-    for speed, noise, color, label in scenarios:
+    for speed, noise, color, label in TEST_SCENARIOS:
         pos, glob, loc, input_len = run_simulation_debug(
             ref_chroma, live_base, speed, noise, label
         )
@@ -238,10 +204,7 @@ def plot_cost_analysis(ref_chroma, live_base):
         # Plot 1: Tracking Pfad
         ax_path.plot(x_axis, pos, color=color, label=label, linewidth=1.5)
 
-        # Plot 2: Globale Kosten (Raw)
-        ax_global.plot(x_axis, glob, color=color, label=label, linewidth=1.5)
-
-        # Plot 3: Moving Average
+        # Plot 2: Moving Average
         if len(glob) >= WINDOW_SIZE:
             glob_smooth = np.convolve(glob, np.ones(WINDOW_SIZE)/WINDOW_SIZE, mode='valid')
             x_axis_smooth = np.linspace(0, 100, len(glob_smooth))
@@ -254,11 +217,7 @@ def plot_cost_analysis(ref_chroma, live_base):
     ax_path.plot([0, 100], [0, ref_len], 'k--', alpha=0.3, label='Ideal')
     ax_path.legend(loc='upper left')
 
-    ax_global.set_title("2. Globale Kosten (Rohwerte)")
-    ax_global.set_ylabel("Akkumulierte Kosten")
-    ax_global.grid(True)
-
-    ax_avg.set_title(f"3. Globale Kosten (Moving Average über {WINDOW_SIZE} Frames)")
+    ax_avg.set_title(f"2. Globale Kosten (Moving Average über {WINDOW_SIZE} Frames)")
     ax_avg.set_ylabel("Ø Kosten")
     ax_avg.set_xlabel("Fortschritt im Input (%)")
     ax_avg.grid(True)
@@ -266,13 +225,13 @@ def plot_cost_analysis(ref_chroma, live_base):
                    label='Mögliche Lost-Schwelle?')
     ax_avg.legend(loc='upper left')
 
-    plt.suptitle("ODTW Kosten-Analyse (Damping=0.96)", fontsize=16)
+    plt.suptitle("ODTW Debug-Analyse (Damping=0.96)", fontsize=16)
     plt.show()
 
 # --- MAIN ---
 
 def main():
-    """Hauptprogramm - wähle Input-Typ und Plot-Typ"""
+    """Hauptprogramm - führt Debug-Analyse durch"""
 
     # Referenz-Chroma laden
     try:
@@ -281,45 +240,22 @@ def main():
         print(f"Fehler beim Laden der Referenz: {e}")
         return
 
-    # Wähle Input-Typ
+    # WAV-Datei laden (wie im echten Teensy)
     print("\n=== ODTW Robustness Testing ===")
-    print("Wähle Input-Typ:")
-    print("  [1] NPY (vorberechnete Chroma)")
-    print("  [2] WAV (Audio-Datei)")
-
-    choice = input("Eingabe (1 oder 2): ").strip()
-
-    if choice == "1":
-        try:
-            live_base = load_chroma_from_npy(LIVE_NPY_FILE)
-            input_type = "npy"
-        except FileNotFoundError:
-            print(f"Fehler: {LIVE_NPY_FILE} nicht gefunden!")
-            return
-    elif choice == "2":
-        try:
-            live_base = load_chroma_from_wav(LIVE_WAV_FILE)
-            input_type = "wav"
-        except FileNotFoundError:
-            print(f"Fehler: {LIVE_WAV_FILE} nicht gefunden!")
-            return
-    else:
-        print("Ungültige Eingabe.")
+    print("Lade Live-Audio von WAV...")
+    try:
+        live_base = load_chroma_from_wav(LIVE_WAV_FILE, save_npy=True)
+        print("✅ Audio geladen und .npy für Verifikation gespeichert")
+    except FileNotFoundError:
+        print(f"❌ Fehler: {LIVE_WAV_FILE} nicht gefunden!")
+        return
+    except Exception as e:
+        print(f"❌ Fehler beim Laden: {e}")
         return
 
-    # Wähle Plot-Typ
-    print("\nWähle Analyse-Typ:")
-    print("  [1] Tracking Comparison (einfach)")
-    print("  [2] Kosten-Analyse (detailliert)")
-
-    plot_choice = input("Eingabe (1 oder 2): ").strip()
-
-    if plot_choice == "1":
-        plot_tracking_comparison(ref_chroma, live_base, input_type)
-    elif plot_choice == "2":
-        plot_cost_analysis(ref_chroma, live_base)
-    else:
-        print("Ungültige Eingabe.")
+    # Führe Debug-Analyse durch
+    print("\n🔍 Starte Debug-Analyse...")
+    plot_analysis(ref_chroma, live_base)
 
 if __name__ == "__main__":
     main()

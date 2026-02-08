@@ -36,6 +36,10 @@ Offline Programme/data/soundfonts/*.sf2
 # Generated files
 Offline Programme/data/generated/*.h
 Offline Programme/data/generated/*.mid
+Offline Programme/data/generated/*.npy
+
+# Optimization Results
+Offline Programme/ODTW_Python/Optimization/optimization_results/
 
 # Jupyter
 .ipynb_checkpoints/

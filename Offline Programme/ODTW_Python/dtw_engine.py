@@ -13,10 +13,10 @@ SEARCH_WINDOW = 100    # Suchradius: Wir suchen nur +/- 80 Frames um die letzte 
 HOP_LENGTH = 512     # Wie viel wir im Fenster weiter springen (Overlap)
 DAMPING_FACTOR = 0.96  # Dämpfungsfaktor für alte Kosten
 WAIT_PENALTY = 0.4    # Strafe fürs Stehenbleiben
-SKIP_PENALTY = 0.1      # Strafe für zu weite - erstmal hohe Strafe
+SKIP_PENALTY = 0.2      # Strafe für zu weite - erstmal hohe Strafe
 BPM = 40
 BEATS_PER_MEASURE = 4
-SMOOTHING_WINDOW = 15 # Anzahl Frames für Moving Average (1 = aus)
+SMOOTHING_WINDOW = 1 # Anzahl Frames für Moving Average (1 = aus)
 # ----------------------
 
 def load_h_file_chroma(filename):
