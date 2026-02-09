@@ -22,8 +22,8 @@ from collections import deque
 from dtw_engine import StandardODTW, DebugODTW, load_h_file_chroma
 
 # --- KONFIGURATION ---
-SCORE_FILE = "data/ScoreData.h"
-LIVE_NPY_FILE = "data/Fiocco-Live (40bpm)_chroma.npy"
+SCORE_FILE = "/Users/samuelgeffert/Desktop/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/Score Pipeline/ScoreData.h"
+LIVE_NPY_FILE = "Offline Programme/data/Fiocco-Live (40bpm)_chroma.npy"
 LIVE_WAV_FILE = "/Users/samuelgeffert/Desktop/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/data/audio/Fiocco-Live (40bpm).wav"
 NPY_OUTPUT_DIR = "../data/generated"  # NPY-Dateien werden hier gespeichert
 

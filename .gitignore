@@ -33,6 +33,9 @@ Offline Programme/data/soundfonts/*.sf2
 *.wav
 !Offline Programme/data/audio/.gitkeep
 
+# Large HTML exports
+*.html
+
 # Generated files
 Offline Programme/data/generated/*.h
 Offline Programme/data/generated/*.mid
