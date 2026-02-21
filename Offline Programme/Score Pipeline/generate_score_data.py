@@ -1,24 +1,25 @@
 # =============================================================================
-# generate_score_data.py – PDF/MusicXML → ScoreData.h
+# generate_score_data.py – MusicXML/PDF → ScoreData.npz
 # =============================================================================
-# Einfache Pipeline: Partitur rein → ScoreData.h raus.
+# Pipeline: Partitur → MIDI → FluidSynth (Audio) → librosa (Chroma) → .npz
 #
 # Nutzung:
 #   python generate_score_data.py partitur.musicxml --bpm 40
-#   python generate_score_data.py partitur.mxl --bpm 40
+#   python generate_score_data.py partitur.mxl --bpm 40 --instrument piano
 #   python generate_score_data.py partitur.pdf --bpm 40   (braucht Audiveris)
 #
-# Keine Audio-Synthese nötig. Chroma wird direkt aus den Noten berechnet.
+# Benötigt: brew install fluidsynth + Soundfont in data/soundfonts/
 # =============================================================================
 
 import sys
 import argparse
 from pathlib import Path
 
-from chroma_builder import build_chroma
-from score_writer import write_score_data
-from omr import convert_pdf
+from utils.chroma_builder import build_chroma
+from utils.score_writer import write_score_data
+from utils.omr import convert_pdf
 
+OUTPUT_DIR = Path(__file__).parent.parent / "data" / "generated"
 
 MUSICXML_EXTENSIONS = {'.musicxml', '.mxl', '.xml'}
 PDF_EXTENSIONS = {'.pdf'}
@@ -26,12 +27,14 @@ PDF_EXTENSIONS = {'.pdf'}
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generiert ScoreData.h aus einer Partitur (PDF oder MusicXML)."
+        description="Generiert ScoreData.npz aus einer Partitur (PDF oder MusicXML)."
     )
     parser.add_argument("input_file", help="PDF, MusicXML oder MXL Datei")
     parser.add_argument("--bpm", type=int, default=40, help="Tempo in BPM (Standard: 40)")
-    parser.add_argument("--output", type=str, default="ScoreData.h",
-                        help="Ausgabedatei (Standard: ScoreData.h)")
+    parser.add_argument("--instrument", type=str, default="violin",
+                        help="Instrument (violin, piano, cello, flute, ... Standard: violin)")
+    parser.add_argument("--output", type=str, default=None,
+                        help="Ausgabedatei (Standard: data/generated/<name>.npz)")
     args = parser.parse_args()
 
     input_path = Path(args.input_file)
@@ -56,20 +59,31 @@ def main():
         print(f"FEHLER: Unbekanntes Format '{suffix}'. Unterstützt: PDF, MusicXML, MXL")
         sys.exit(1)
 
-    # 2. MusicXML → Chroma + Seitenumbrüche
-    print(f"\n[2/3] Berechne Chroma-Vektoren aus Noten")
+    # 2. MusicXML → MIDI → FluidSynth → Chroma + Seitenumbrüche
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    if args.output:
+        output_path = Path(args.output)
+    else:
+        output_path = OUTPUT_DIR / f"{input_path.stem}.npz"
+    wav_output_path = output_path.with_suffix(".wav")
+
+    print(f"\n[2/3] Synthetisiere Audio und berechne Chroma")
     try:
-        chroma, page_indices = build_chroma(musicxml_path, args.bpm)
+        chroma, page_indices = build_chroma(
+            musicxml_path, args.bpm, args.instrument,
+            wav_output_path=str(wav_output_path)
+        )
     except Exception as e:
         print(f"FEHLER bei Chroma-Berechnung: {e}")
         sys.exit(1)
 
-    # 3. ScoreData.h schreiben
-    print(f"\n[3/3] Schreibe {args.output}")
-    metadata = f"Generiert aus {input_path.name}, BPM: {args.bpm}"
-    write_score_data(args.output, chroma, page_indices, metadata)
+    # 3. ScoreData.npz speichern
 
-    print(f"\nFERTIG! {args.output} erstellt.")
+    print(f"\n[3/3] Speichere {output_path}")
+    metadata = f"Generiert aus {input_path.name}, BPM: {args.bpm}, Instrument: {args.instrument}"
+    write_score_data(str(output_path), chroma, page_indices, metadata)
+
+    print(f"\nFERTIG! {output_path}")
     print(f"  Frames: {chroma.shape[1]}, Seiten: {len(page_indices) + 1}")
 
 

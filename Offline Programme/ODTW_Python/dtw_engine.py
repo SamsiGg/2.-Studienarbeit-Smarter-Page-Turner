@@ -3,73 +3,34 @@ import librosa
 import sounddevice as sd
 import scipy.spatial.distance as dist
 import time
-import re
 from collections import deque
 
 # --- KONFIGURATION ---
 SAMPLE_RATE = 44100  # Weniger reicht oft für Chroma und spart Rechenleistung
 BLOCK_SIZE = 4096     # Größe des Audio-Schnipsels (Latzenz vs. Genauigkeit)
-SEARCH_WINDOW = 100    # Suchradius: Wir suchen nur +/- 80 Frames um die letzte Position
+SEARCH_WINDOW = 200    # Suchradius: Wir suchen nur +/- 200 Frames um die letzte Position
 HOP_LENGTH = 512     # Wie viel wir im Fenster weiter springen (Overlap)
 DAMPING_FACTOR = 0.96  # Dämpfungsfaktor für alte Kosten
-WAIT_PENALTY = 0.4    # Strafe fürs Stehenbleiben
-SKIP_PENALTY = 0.2      # Strafe für zu weite - erstmal hohe Strafe
+WAIT_PENALTY = 0.3    # Strafe fürs Stehenbleiben
+SKIP_PENALTY = 0.15      # Strafe für zu weite - erstmal hohe Strafe
 BPM = 40
 BEATS_PER_MEASURE = 4
 SMOOTHING_WINDOW = 1 # Anzahl Frames für Moving Average (1 = aus)
 # ----------------------
 
-def load_h_file_chroma(filename):
+def load_score_chroma(filename):
+    """Lädt Chroma aus .npz Datei. Gibt (12, N) zurück."""
     print(f"Lade {filename}...")
-    with open(filename, 'r') as f:
-        content = f.read()
-    
-    # 1. Den Start der Chroma-Daten finden
-    # Wir suchen nach dem Variablennamen "score_chroma"
-    keyword = "score_chroma"
-    start_pos = content.find(keyword)
-    
-    if start_pos == -1:
-        raise ValueError(f"Konnte '{keyword}' in der Datei nicht finden!")
-        
-    # Wir schneiden alles vor der Variable ab (damit ignorieren wir num_pages, score_len etc.)
-    content_chroma = content[start_pos:]
-    
-    # Jetzt suchen wir die erste geschweifte Klammer { NACH dem Variablennamen
-    array_start = content_chroma.find('{')
-    array_end = content_chroma.rfind('}') # Die allerletzte Klammer
-    
-    # Nur den Inhalt zwischen den Klammern nehmen
-    data_string = content_chroma[array_start:array_end+1]
-    
-    # 2. Bereinigen
-    clean_content = data_string.replace('f', '').replace('{', '').replace('}', '').replace(';', '')
-    tokens = clean_content.replace(',', ' ').split()
-    
-    values = []
-    for t in tokens:
-        try:
-            values.append(float(t))
-        except ValueError:
-            continue
-            
-    # 3. Validierung
-    if len(values) == 0:
-        raise ValueError("Keine Zahlen im Chroma-Bereich gefunden!")
-        
-    if len(values) % 12 != 0:
-        print(f"WARNUNG: Anzahl Werte ({len(values)}) nicht durch 12 teilbar. Schneide ab.")
-        cut_len = (len(values) // 12) * 12
-        values = values[:cut_len]
-        
-    # Shape (N, 12) -> Transponieren zu (12, N)
-    arr = np.array(values).reshape(-1, 12).T
-    
+    archive = np.load(filename)
+    chroma = archive['chroma']  # (12, N)
+    page_indices = archive['page_end_indices']
+
     print("--- DATEN CHECK ---")
-    print(f"Erster Vektor (Sample): {arr[:, 0]}")
-    print(f"L2-Norm Frame 0: {np.linalg.norm(arr[:, 0]):.4f}")
-    
-    return arr
+    print(f"  Shape: {chroma.shape}, Seitengrenzen: {page_indices}")
+    print(f"  Erster Vektor (Sample): {chroma[:, 0]}")
+    print(f"  L2-Norm Frame 0: {np.linalg.norm(chroma[:, 0]):.4f}")
+
+    return chroma
 
 # --- Aktualisierte DTW Logik mit deinen Ideen ---
 
@@ -296,7 +257,7 @@ def main():
     print("--------------------\n")
 
     try:
-        ref_chroma = load_h_file_chroma("data/ScoreData.h")
+        ref_chroma = load_score_chroma("../data/generated/Fiocco_Musescore.npz")
         n_frames = ref_chroma.shape[1]
     except Exception as e:
         print(f"Fehler: {e}")

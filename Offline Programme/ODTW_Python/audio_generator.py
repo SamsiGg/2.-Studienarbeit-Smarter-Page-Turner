@@ -1,3 +1,13 @@
+# =============================================================================
+# audio_generator.py – Chroma-Vektoren → WAV-Melodie (dominanter Ton)
+# =============================================================================
+# Nutzung:
+#   python audio_generator.py ../data/generated/Fiocco.npz
+#   python audio_generator.py ../data/generated/Fiocco.npz --out melodie.wav
+#
+# Unterstützte Formate: .npz (Score Pipeline), .npy, .h (Legacy)
+# =============================================================================
+
 import argparse
 import os
 import re
@@ -35,7 +45,19 @@ def load_chroma_vectors(filename):
     # Dateiendung prüfen
     _, ext = os.path.splitext(filename)
 
-    if ext.lower() == '.npy':
+    if ext.lower() == '.npz':
+        print(f"📂 Lade NumPy-Archiv: {filename} ...")
+        try:
+            archive = np.load(filename)
+            data = archive['chroma']  # Shape (12, N)
+            print(f"  Chroma: {data.shape}, Seitengrenzen: {archive['page_end_indices']}")
+            # Transponieren zu (N, 12) für dieses Skript
+            return data.T
+        except Exception as e:
+            print(f"❌ Fehler beim Laden der .npz Datei: {e}")
+            sys.exit(1)
+
+    elif ext.lower() == '.npy':
         print(f"📂 Lade NumPy Binärdatei: {filename} ...")
         try:
             data = np.load(filename)
@@ -46,7 +68,7 @@ def load_chroma_vectors(filename):
                 elif data.shape[0] == 12:
                     print("⚠️  Format war (12, Zeit), wurde transponiert zu (Zeit, 12).")
                     return data.T
-            
+
             print(f"❌ FEHLER: Unerwartetes Array-Format: {data.shape}. Erwartet (N, 12).")
             sys.exit(1)
         except Exception as e:
@@ -80,8 +102,8 @@ def load_chroma_vectors(filename):
 
 def main():
     # Argumente parsen
-    parser = argparse.ArgumentParser(description="Erstellt eine Melodie aus Chroma-Vektoren (.h oder .npy).")
-    parser.add_argument("input_file", help="Pfad zur Eingabedatei (ScoreData.h oder data.npy)")
+    parser = argparse.ArgumentParser(description="Erstellt eine Melodie aus Chroma-Vektoren (.npz, .npy oder .h).")
+    parser.add_argument("input_file", help="Pfad zur Eingabedatei (.npz, .npy oder .h)")
     parser.add_argument("--out", default=DEFAULT_OUTPUT_FILENAME, help="Name der Ausgabedatei (.wav)")
     
     args = parser.parse_args()
