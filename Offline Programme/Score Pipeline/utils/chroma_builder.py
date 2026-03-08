@@ -42,7 +42,7 @@ os.environ["PATH"] += os.pathsep + "/opt/homebrew/bin"
 def build_chroma(musicxml_path: str, bpm: int, instrument: str = "violin",
                  sample_rate: int = SAMPLE_RATE,
                  hop_length: int = HOP_LENGTH,
-                 wav_output_path: str = None) -> tuple[np.ndarray, list[int]]:
+                 wav_output_path: str = None) -> tuple[np.ndarray, list[int], np.ndarray]:
     """MusicXML → MIDI → FluidSynth → Chroma-Matrix + Seitenumbruch-Indizes.
 
     Args:
@@ -54,9 +54,10 @@ def build_chroma(musicxml_path: str, bpm: int, instrument: str = "violin",
         wav_output_path: Optionaler Pfad zum Speichern der synthetisierten WAV.
 
     Returns:
-        (chroma, page_end_indices):
+        (chroma, page_end_indices, silence_mask):
             chroma: Shape (12, N), L2-normalisiert.
             page_end_indices: Liste der Frame-Indizes an Seitenenden.
+            silence_mask: Boolean-Array (N,), True = stiller Frame (zufälliges Chroma).
     """
     print(f"Lade {musicxml_path}...")
     score = music21.converter.parse(musicxml_path)
@@ -141,7 +142,7 @@ def build_chroma(musicxml_path: str, bpm: int, instrument: str = "violin",
     num_frames = chroma.shape[1]
     print(f"  {num_frames} Frames, {len(page_indices)} Seitengrenzen")
 
-    return chroma, page_indices
+    return chroma, page_indices, silent_frames
 
 
 def _remove_grace_notes(part):
