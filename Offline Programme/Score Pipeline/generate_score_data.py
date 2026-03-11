@@ -73,7 +73,7 @@ def main():
 
     print(f"\n[2/3] Synthetisiere Audio und berechne Chroma")
     try:
-        chroma, page_indices, silence_mask = build_chroma(
+        chroma, page_indices = build_chroma(
             musicxml_path, args.bpm, args.instrument,
             wav_output_path=str(wav_output_path)
         )
@@ -88,8 +88,7 @@ def main():
     metadata = f"Generiert aus {input_path.name}, BPM: {args.bpm}, Instrument: {args.instrument}"
     write_score_data(str(output_path), chroma, page_indices, metadata,
                      bpm=args.bpm, beats_per_measure=args.beats_per_measure,
-                     musicxml_content=musicxml_content,
-                     silence_mask=silence_mask)
+                     musicxml_content=musicxml_content)
 
     total_frames = chroma.shape[1]
     num_pages = len(page_indices) + 1

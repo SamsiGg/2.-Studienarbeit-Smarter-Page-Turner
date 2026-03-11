@@ -12,8 +12,6 @@ import numpy as np
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
-
 
 @dataclass
 class ScoreData:
@@ -26,7 +24,6 @@ class ScoreData:
     bpm: int = 40                   # Tempo in BPM (aus NPZ oder settings-Fallback)
     beats_per_measure: int = 4      # Schläge pro Takt
     musicxml_content: str = ""      # MusicXML-Quelltext (leer = nicht verfügbar)
-    silence_mask: Optional[np.ndarray] = None  # (N,) bool – True = stiller Frame (zufälliges Chroma)
 
 
 def load_score_data(filepath: str) -> ScoreData:
@@ -55,23 +52,6 @@ def _load_npz(path: Path) -> ScoreData:
     beats_per_measure = int(data['beats_per_measure']) if 'beats_per_measure' in data else settings.BEATS_PER_MEASURE
     musicxml_content = str(data['musicxml_content']) if 'musicxml_content' in data else ""
 
-    # silence_mask: welche Frames haben zufälliges Chroma (Stille/Pausen)
-    silence_mask = data['silence_mask'].astype(bool) if 'silence_mask' in data else None
-
-    # Score am letzten echten Musik-Frame trimmen (silence_mask-basiert)
-    # → verhindert, dass der Tracker bei Stille ans Ende driftet
-    if silence_mask is not None:
-        real_frames = np.where(~silence_mask)[0]
-        if len(real_frames) > 0:
-            trim_idx = int(real_frames[-1]) + 1
-            if trim_idx < chroma.shape[1]:
-                removed = chroma.shape[1] - trim_idx
-                print(f"  Stille getrimmt: {chroma.shape[1]} → {trim_idx} Frames "
-                      f"({removed} stille Frames am Ende entfernt)")
-                chroma = chroma[:, :trim_idx]
-                silence_mask = silence_mask[:trim_idx]
-                page_end_indices = [i for i in page_end_indices if i < trim_idx]
-
     num_pages = len(page_end_indices) + 1
 
     print(f"  Seiten: {num_pages}, Seitengrenzen: {page_end_indices}")
@@ -88,7 +68,6 @@ def _load_npz(path: Path) -> ScoreData:
         bpm=bpm,
         beats_per_measure=beats_per_measure,
         musicxml_content=musicxml_content,
-        silence_mask=silence_mask,
     )
 
 

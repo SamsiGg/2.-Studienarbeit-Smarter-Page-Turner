@@ -13,7 +13,7 @@ import librosa
 import matplotlib.pyplot as plt
 
 # --- KONFIGURATION ---
-SCORE_FILE = "/Users/samuelgeffert/Desktop/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/data/generated/Pachelbel_Musescore.npz"
+SCORE_FILE = "/Users/samuelgeffert/Desktop/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/data/scores/Pachelbel_Musescore.npz"
 LIVE_WAV_FILE = "/Users/samuelgeffert/Desktop/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/data/audio/Pachelbel-Live-35bpm.wav"
 
 SAMPLE_RATE = 44100
@@ -23,7 +23,7 @@ BEATS_PER_MEASURE = 4
 
 # Welche Takte vergleichen? (5 Stück)
 COMPARE_MEASURES = [50, 51, 52, 53, 54]
-#COMPARE_MEASURES = [20, 21, 22, 23, 24]
+COMPARE_MEASURES = [20, 21, 22, 23, 24]
 
 CHROMA_LABELS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
@@ -65,6 +65,8 @@ def main():
     parser.add_argument("--bpm", type=int, default=BPM, help="Tempo in BPM")
     parser.add_argument("--auftakt", type=float, default=0.5,
                         help="Auftakt-Länge in Viertelnoten (0.5 = Achtel, 1.0 = Viertel, Standard: 0.5)")
+    parser.add_argument("--score-offset", type=int, default=0,
+                        help="Referenz um N Takte vorziehen (positiv = Partitur früher, negativ = später)")
     args = parser.parse_args()
 
     # --- DATEN LADEN ---
@@ -86,6 +88,12 @@ def main():
     norm_l[norm_l == 0] = 1
     live_norm = live_chroma / norm_l
 
+    # Takt-Offset in Frames umrechnen
+    frames_per_measure = int((60.0 / args.bpm) * BEATS_PER_MEASURE * SAMPLE_RATE / HOP_LENGTH)
+    score_frame_offset = args.score_offset * frames_per_measure
+    if args.score_offset != 0:
+        print(f"Score-Offset: {args.score_offset} Takte = {score_frame_offset} Frames")
+
     print(f"Partitur: {score_chroma.shape[1]} Frames")
     print(f"Live:     {live_chroma.shape[1]} Frames")
 
@@ -98,11 +106,15 @@ def main():
     for row, measure in enumerate(compare_measures):
         start_f, end_f = measure_to_frame_range(measure, SAMPLE_RATE, HOP_LENGTH, args.bpm, BEATS_PER_MEASURE, args.auftakt)
 
+        # Score-Offset anwenden (Partitur vorziehen/verschieben)
+        score_start = max(0, start_f + score_frame_offset)
+        score_end = max(0, end_f + score_frame_offset)
+
         # Sicherstellen, dass wir nicht über die Grenzen gehen
-        end_f_score = min(end_f, score_chroma.shape[1])
+        end_f_score = min(score_end, score_chroma.shape[1])
         end_f_live = min(end_f, live_chroma.shape[1])
 
-        score_slice = score_norm[:, start_f:end_f_score]
+        score_slice = score_norm[:, score_start:end_f_score]
         live_slice = live_norm[:, start_f:end_f_live]
 
         # Durchschnittlicher Chroma-Vektor pro Takt
@@ -140,7 +152,8 @@ def main():
         axes[row, 1].set_title(f"Takt {measure} – Zeitverlauf")
         axes[row, 1].set_xlabel("Frame im Takt")
 
-    plt.suptitle("Partitur vs Live-Audio – Chroma-Vergleich pro Takt", fontsize=14)
+    offset_str = f" (Score-Offset: {args.score_offset:+d} Takte)" if args.score_offset != 0 else ""
+    plt.suptitle(f"Partitur vs Live-Audio – Chroma-Vergleich pro Takt{offset_str}", fontsize=14)
     plt.show()
 
 

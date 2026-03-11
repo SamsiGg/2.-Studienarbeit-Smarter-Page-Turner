@@ -11,6 +11,7 @@
 import os
 import subprocess
 import tempfile
+import zipfile
 import xml.etree.ElementTree as ET
 import numpy as np
 import music21
@@ -22,8 +23,10 @@ SAMPLE_RATE = 44100
 FFT_SIZE = 4096
 HOP_LENGTH = 512
 
-# Schwellwert für stille Frames (Pausen): untere X% der RMS-Werte → Rauschen
-RMS_SILENCE_PERCENTILE = 3
+# Rauschen wird direkt ins synthetisierte Audio eingemischt (vor Chroma-Berechnung).
+# Sobald der Ton leiser wird als dieser RMS-Pegel (Ausklingen/Reverb), dominiert das
+# Rauschen und erzeugt ein neutrales Chroma-Muster – keine separierte Silence-Logik nötig.
+NOISE_FLOOR_RMS = 0.004
 
 # Soundfont-Pfad (relativ zum Projekt)
 SOUNDFONT_PATH = os.path.join(
@@ -43,7 +46,7 @@ os.environ["PATH"] += os.pathsep + "/opt/homebrew/bin"
 def build_chroma(musicxml_path: str, bpm: int, instrument: str = "violin",
                  sample_rate: int = SAMPLE_RATE,
                  hop_length: int = HOP_LENGTH,
-                 wav_output_path: str = None) -> tuple[np.ndarray, list[int], np.ndarray]:
+                 wav_output_path: str = None) -> tuple[np.ndarray, list[int]]:
     """MusicXML → MIDI → FluidSynth → Chroma-Matrix + Seitenumbruch-Indizes.
 
     Args:
@@ -55,12 +58,12 @@ def build_chroma(musicxml_path: str, bpm: int, instrument: str = "violin",
         wav_output_path: Optionaler Pfad zum Speichern der synthetisierten WAV.
 
     Returns:
-        (chroma, page_end_indices, silence_mask):
+        (chroma, page_end_indices):
             chroma: Shape (12, N), L2-normalisiert.
             page_end_indices: Liste der Frame-Indizes an Seitenenden.
-            silence_mask: Boolean-Array (N,), True = stiller Frame (zufälliges Chroma).
     """
     print(f"Lade {musicxml_path}...")
+    musicxml_path = _fix_invalid_clefs(musicxml_path)
     score = music21.converter.parse(musicxml_path)
 
     if not score.parts:
@@ -115,6 +118,11 @@ def build_chroma(musicxml_path: str, bpm: int, instrument: str = "violin",
         print(f"  Berechne Chroma aus synthetisiertem Audio...")
         y, sr = librosa.load(wav_path, sr=sample_rate, mono=True)
 
+        # Noise Floor einmischen: Sobald der Ton unter NOISE_FLOOR_RMS ausklingt,
+        # dominiert das Rauschen und erzeugt ein neutrales Chroma (kein Reverb-Artefakt).
+        noise = np.random.normal(0.0, NOISE_FLOOR_RMS, size=len(y)).astype(np.float32)
+        y = y + noise
+
         # 4. WAV optional speichern
         if wav_output_path:
             sf.write(wav_output_path, y, sr)
@@ -124,17 +132,6 @@ def build_chroma(musicxml_path: str, bpm: int, instrument: str = "violin",
             y=y, sr=sr, n_fft=FFT_SIZE, hop_length=hop_length, n_chroma=12
         )
 
-        # RMS-Energie pro Frame berechnen
-        rms = librosa.feature.rms(y=y, frame_length=FFT_SIZE, hop_length=hop_length)[0]
-        rms = rms[:chroma_raw.shape[1]]
-
-    # Leise Frames (Pausen/Reverb-Ausklang) → gleichmäßig verteiltes Rauschen
-    rms_threshold = np.percentile(rms, RMS_SILENCE_PERCENTILE)
-    silent_frames = rms < rms_threshold
-    chroma_raw[:, silent_frames] = np.random.uniform(0.0, 1.0, size=chroma_raw[:, silent_frames].shape)
-    n_silent = np.sum(silent_frames)
-    print(f"  {n_silent} stille Frames mit Rauschen ersetzt ({n_silent / len(rms) * 100:.1f}%)")
-
     # L2-Normalisierung pro Frame
     norms = np.linalg.norm(chroma_raw, axis=0, keepdims=True)
     norms[norms == 0] = 1
@@ -143,7 +140,78 @@ def build_chroma(musicxml_path: str, bpm: int, instrument: str = "violin",
     num_frames = chroma.shape[1]
     print(f"  {num_frames} Frames, {len(page_indices)} Seitengrenzen")
 
-    return chroma, page_indices, silent_frames
+    return chroma, page_indices
+
+
+def _fix_invalid_clefs(musicxml_path: str) -> str:
+    """Korrigiert ungültige Schlüssel (z.B. F6) in MusicXML/MXL-Dateien.
+
+    Audiveris erzeugt manchmal Schlüssel mit ungültigen Liniennummern (>5).
+    music21 wirft dann eine ValueError. Diese Funktion setzt sie auf Standardwerte:
+      F (Bass) → Linie 4, G (Violin) → Linie 2, C (Alto/Tenor) → Linie 3.
+
+    Returns:
+        Pfad zur (ggf. korrigierten) Datei – entweder das Original oder eine
+        temporäre Kopie mit den Korrekturen.
+    """
+    CLEF_DEFAULT_LINE = {'G': '2', 'F': '4', 'C': '3'}
+
+    def fix_xml(xml_bytes: bytes) -> tuple[bytes, int]:
+        root = ET.fromstring(xml_bytes)
+        fixes = 0
+        for clef in root.iter():
+            if not clef.tag.endswith('clef'):
+                continue
+            sign_el = next((c for c in clef if c.tag.endswith('sign')), None)
+            line_el = next((c for c in clef if c.tag.endswith('line')), None)
+            if sign_el is None or line_el is None:
+                continue
+            sign = sign_el.text.strip().upper() if sign_el.text else ''
+            try:
+                line = int(line_el.text)
+            except (TypeError, ValueError):
+                continue
+            if line < 1 or line > 5:
+                default = CLEF_DEFAULT_LINE.get(sign)
+                if default:
+                    line_el.text = default
+                    fixes += 1
+        return ET.tostring(root, encoding='unicode').encode('utf-8'), fixes
+
+    if zipfile.is_zipfile(musicxml_path):
+        with zipfile.ZipFile(musicxml_path, 'r') as zf:
+            names = zf.namelist()
+            xml_name = next((n for n in names if n.endswith('.xml') and not n.startswith('__')), None)
+            if xml_name is None:
+                return musicxml_path
+            original = zf.read(xml_name)
+            fixed, fixes = fix_xml(original)
+            if fixes == 0:
+                return musicxml_path
+            print(f"  {fixes} ungültige Schlüssel korrigiert (z.B. F6→F4).")
+            tmp = tempfile.NamedTemporaryFile(suffix='.mxl', delete=False)
+            tmp.close()
+            import shutil
+            shutil.copy2(musicxml_path, tmp.name)
+            with zipfile.ZipFile(tmp.name, 'w') as zout:
+                for name in names:
+                    if name == xml_name:
+                        zout.writestr(name, fixed)
+                    else:
+                        with zipfile.ZipFile(musicxml_path, 'r') as zf2:
+                            zout.writestr(name, zf2.read(name))
+            return tmp.name
+    else:
+        with open(musicxml_path, 'rb') as f:
+            original = f.read()
+        fixed, fixes = fix_xml(original)
+        if fixes == 0:
+            return musicxml_path
+        print(f"  {fixes} ungültige Schlüssel korrigiert (z.B. F6→F4).")
+        tmp = tempfile.NamedTemporaryFile(suffix='.xml', delete=False)
+        tmp.write(fixed)
+        tmp.close()
+        return tmp.name
 
 
 def _remove_grace_notes(part):

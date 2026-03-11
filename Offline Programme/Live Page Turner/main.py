@@ -441,7 +441,6 @@ class PageTurnerGUI:
             recovery_avg_window=settings.RECOVERY_AVG_WINDOW,
             recovery_buffer_size=settings.RECOVERY_BUFFER_SIZE,
             recovery_jump_threshold=settings.RECOVERY_JUMP_THRESHOLD,
-            silence_mask=self.score_data.silence_mask,
             silence_frames_before_sleep=settings.SILENCE_FRAMES_BEFORE_SLEEP,
         )
 

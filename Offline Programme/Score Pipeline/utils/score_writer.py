@@ -7,16 +7,8 @@ import numpy as np
 
 def write_score_data(filepath: str, chroma: np.ndarray, page_end_indices: list[int],
                      metadata: str = "", bpm: int = 40, beats_per_measure: int = 4,
-                     musicxml_content: str = "", silence_mask: np.ndarray = None):
+                     musicxml_content: str = ""):
     """Speichert Chroma-Daten als .npz Datei.
-
-    Enthält:
-        - chroma: Shape (12, N) – L2-normalisierte Chroma-Vektoren
-        - page_end_indices: Frame-Indizes der Seitenenden
-        - silence_mask: Boolean-Array (N,) – True = stiller Frame (zufälliges Chroma)
-        - bpm: Tempo in BPM
-        - beats_per_measure: Taktart (Zähler, z.B. 4 für 4/4)
-        - metadata: Beschreibungstext
 
     Args:
         filepath: Ausgabepfad (z.B. "ScoreData.npz").
@@ -25,7 +17,6 @@ def write_score_data(filepath: str, chroma: np.ndarray, page_end_indices: list[i
         metadata: Optionaler Beschreibungstext.
         bpm: Tempo in BPM.
         beats_per_measure: Anzahl Schläge pro Takt.
-        silence_mask: Boolean-Array (N,), True = stiller Frame. None → nicht gespeichert.
     """
     arrays = dict(
         chroma=chroma,
@@ -35,9 +26,6 @@ def write_score_data(filepath: str, chroma: np.ndarray, page_end_indices: list[i
         musicxml_content=np.array(musicxml_content),
         metadata=np.array(metadata),
     )
-    if silence_mask is not None:
-        arrays['silence_mask'] = np.array(silence_mask, dtype=bool)
-
     np.savez(filepath, **arrays)
 
     num_frames = chroma.shape[1]

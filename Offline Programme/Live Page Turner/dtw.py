@@ -138,7 +138,6 @@ class ODTWTracker:
         recovery_avg_window: int = 300,
         recovery_buffer_size: int = 500,
         recovery_jump_threshold: float = 0.4,
-        silence_mask: np.ndarray = None,
         silence_frames_before_sleep: int = 50,
     ):
         # Referenz
@@ -175,9 +174,6 @@ class ODTWTracker:
         self.cost_history = deque(maxlen=recovery_avg_window)
         self.chroma_history = deque(maxlen=recovery_buffer_size)
         self.recovery_count = 0
-        # Silence-Maske: Frames mit zufälligem Chroma dürfen nicht als Sprungziel dienen
-        self.silence_mask = silence_mask  # (N,) bool oder None
-
         # Sleep-Modus
         self.silence_frames_before_sleep = silence_frames_before_sleep
 
@@ -447,11 +443,6 @@ class ODTWTracker:
         m_sub = ref_sub.shape[1]
 
         D = (1.0 - np.clip(live_matrix @ ref_sub, -1.0, 1.0)).astype(np.float64)  # (N, m_sub)
-
-        # Stille-Frames als Sprungziel sperren: Kosten auf inf setzen
-        if self.silence_mask is not None:
-            silent_sub = self.silence_mask[::step][:m_sub]
-            D[:, silent_sub] = np.inf
 
         # Subsequence-DTW mit freiem Start (numba-JIT wenn verfügbar):
         if _NUMBA_AVAILABLE:

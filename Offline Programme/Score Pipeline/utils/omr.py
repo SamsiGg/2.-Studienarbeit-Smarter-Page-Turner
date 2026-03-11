@@ -62,6 +62,9 @@ def convert_pdf(pdf_path: str, output_dir: str | None = None) -> str:
     print(f"Starte Audiveris OMR: {pdf_path.name}")
     print(f"  Executable: {audiveris_bin}")
 
+    # Snapshot vor dem Aufruf: bereits vorhandene .mxl-Dateien merken
+    existing_mxl = set(Path(output_dir).rglob("*.mxl")) if Path(output_dir).exists() else set()
+
     result = subprocess.run(
         cmd,
         capture_output=True,
@@ -72,8 +75,8 @@ def convert_pdf(pdf_path: str, output_dir: str | None = None) -> str:
         print(f"  Audiveris stderr: {result.stderr[:500]}")
         raise RuntimeError(f"Audiveris Fehler (Code {result.returncode})")
 
-    # Ausgabe-Datei finden (.mxl)
-    mxl_path = _find_output_mxl(output_dir, pdf_path.stem)
+    # Ausgabe-Datei finden (.mxl) – zuerst nach dem Stem, dann nur neue Dateien
+    mxl_path = _find_output_mxl(output_dir, pdf_path.stem, existing_mxl)
     if mxl_path is None:
         raise RuntimeError(
             f"Audiveris hat keine .mxl Datei erzeugt. "
@@ -108,24 +111,30 @@ def _find_audiveris() -> str | None:
     return None
 
 
-def _find_output_mxl(output_dir: str, stem: str) -> str | None:
+def _find_output_mxl(output_dir: str, stem: str, existing_mxl: set | None = None) -> str | None:
     """Sucht die erzeugte .mxl Datei in typischen Audiveris-Ausgabepfaden."""
     output_path = Path(output_dir)
 
-    # Direkte Kandidaten
+    # Direkte Kandidaten (exakter Stem)
     candidates = [
         output_path / f"{stem}.mxl",
         output_path / stem / f"{stem}.mxl",
     ]
-
     for candidate in candidates:
         if candidate.exists():
             return str(candidate)
 
-    # Fallback: alle .mxl rekursiv suchen
+    # Audiveris hängt manchmal ".mvt1" o.ä. an – nach Stem-Präfix suchen
     if output_path.exists():
         for mxl in output_path.rglob("*.mxl"):
-            return str(mxl)
+            if mxl.name.startswith(stem):
+                return str(mxl)
+
+    # Letzter Fallback: nur Dateien, die nach dem Audiveris-Aufruf neu entstanden sind
+    if existing_mxl is not None and output_path.exists():
+        new_files = set(output_path.rglob("*.mxl")) - existing_mxl
+        if new_files:
+            return str(next(iter(new_files)))
 
     return None
 
