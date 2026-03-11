@@ -1,15 +1,15 @@
 # =============================================================================
-# ble_keyboard.py – Network MIDI Page Turner (Mac → iPad über WiFi)
+# ble_keyboard.py – Bluetooth MIDI Page Turner (Mac → iPad über Bluetooth)
 # =============================================================================
-# Sendet MIDI-Signale über das lokale Netzwerk an ein iPad.
-# Kein extra Hardware nötig – macOS hat Network MIDI eingebaut.
+# Sendet MIDI-Signale über Bluetooth MIDI an ein iPad.
+# Kein extra Hardware nötig – macOS hat Bluetooth MIDI eingebaut.
 #
 # Einrichtung (einmalig):
-#   MAC:  Audio MIDI Setup.app → MIDI-Studio → Netzwerk → Eigene Sitzung aktivieren
-#   iPAD: Einstellungen → Allgemein → MIDI → Netzwerk-Session → Mac auswählen
+#   MAC:  Audio MIDI Setup.app → Bluetooth → iPad in der Liste → "Verbinden"
+#   iPAD: Einstellungen → Bluetooth → Mac auswählen und koppeln
 #
 # Sheet-Music-App auf dem iPad:
-#   → In der App MIDI-Eingang auf "Network Session" stellen
+#   → In der App MIDI-Eingang auf den Bluetooth-Port stellen
 #   → Seitenumblättern auf CC 64 (oder CC 67, je nach App) konfigurieren
 #
 # Installation:
@@ -61,17 +61,16 @@ class BLEKeyboard:
         available = mido.get_output_names()
         print(f"[MIDI] Verfügbare Ports: {available}")
 
-        # Bevorzugt: Network Session (macOS Network MIDI, deutsch: "Netzwerk")
-        preferred = [p for p in available if 'Network' in p or 'network' in p
-                     or 'Netzwerk' in p or 'netzwerk' in p]
+        # Bevorzugt: Bluetooth MIDI (macOS CoreMIDI Bluetooth)
+        preferred = [p for p in available if 'Bluetooth' in p or 'bluetooth' in p]
         if preferred:
             self._port_name = preferred[0]
         elif available:
             self._port_name = available[0]
-            print(f"[MIDI] Kein Network-Port gefunden – nutze: {self._port_name}")
+            print(f"[MIDI] Kein Bluetooth-Port gefunden – nutze: {self._port_name}")
         else:
             print("[MIDI] FEHLER: Kein MIDI-Ausgangsport gefunden.")
-            print("[MIDI] Audio MIDI Setup öffnen → Netzwerk aktivieren.")
+            print("[MIDI] Audio MIDI Setup öffnen → Bluetooth → iPad verbinden.")
             return
 
         try:
@@ -79,7 +78,7 @@ class BLEKeyboard:
             self._advertising = True
             self._connected   = True
             print(f"[MIDI] Port geöffnet: '{self._port_name}'")
-            print(f"[MIDI] iPad: Einstellungen → Musik → MIDI → Netzwerk → Mac auswählen")
+            print(f"[MIDI] iPad: Einstellungen → Bluetooth → Mac koppeln")
         except Exception as e:
             print(f"[MIDI] Port konnte nicht geöffnet werden: {e}")
 

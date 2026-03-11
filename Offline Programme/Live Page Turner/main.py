@@ -418,9 +418,13 @@ class PageTurnerGUI:
         self._last_jump_time = 0.0   # Timer bei jedem Start zurücksetzen
 
         # Tracker (neu) erstellen
+        page_end_indices_offset = [
+            max(0, idx - settings.PAGE_TURN_OFFSET)
+            for idx in self.score_data.page_end_indices
+        ]
         tracker = ODTWTracker(
             reference_chroma=self.score_data.chroma,
-            page_end_indices=self.score_data.page_end_indices,
+            page_end_indices=page_end_indices_offset,
             search_window=settings.SEARCH_WINDOW,
             damping_factor=settings.DAMPING_FACTOR,
             wait_penalty=settings.WAIT_PENALTY,

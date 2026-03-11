@@ -31,7 +31,7 @@ RECOVERY_BUFFER_SIZE = 300       # Gespeicherte Chroma-Frames für Full-Score-Sc
 RECOVERY_JUMP_THRESHOLD = 1   # Max. Scan-Qualität für gültigen Sprung (0=perfekt, 1=Stille)
 
 # --- Seitenwechsel ---
-PAGE_TURN_OFFSET = 10        # Frames VOR page_end_index auslösen (Teensy: PAGE_TURN_OFFSET = 10)
+PAGE_TURN_OFFSET = 100        # Frames VOR page_end_index auslösen
 PAGE_TURN_STABLE_TIME = 0.0  # Sekunden ohne Recovery, bevor MIDI-Signal gesendet wird
 
 # --- Start-Erkennung & Sleep-Modus ---
@@ -46,12 +46,13 @@ BEATS_PER_MEASURE = 4        # Taktart (4/4)
 SMOOTHING_WINDOW = 1         # Moving Average für Chroma (1 = aus)
 
 # --- Dateipfade ---
-SCORE_DATA_PATH = "/Users/samuelgeffert/Desktop/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/data/scores/Pachelbel_Musescore.npz"
+from pathlib import Path
+SCORE_DATA_PATH = str(Path(__file__).parent.parent / "data" / "scores" / "Pachelbel_Musescore.npz")
 
-# --- Network MIDI (Mac → iPad) ---
-USE_BLE_KEYBOARD = True      # True: Seitenumblättern via Network MIDI (WLAN)
+# --- Bluetooth MIDI (Mac → iPad) ---
+USE_BLE_KEYBOARD = True      # True: Seitenumblättern via Bluetooth MIDI
                              # Voraussetzung: pip install mido python-rtmidi
-                             # Einrichtung: Audio MIDI Setup → Netzwerk aktivieren
+                             # Einrichtung: Audio MIDI Setup → Bluetooth → iPad verbinden
 
 # --- GUI ---
 GUI_UPDATE_MS = 50           # GUI-Poll-Intervall in ms (20 Hz)

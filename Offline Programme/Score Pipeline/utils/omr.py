@@ -62,20 +62,15 @@ def convert_pdf(pdf_path: str, output_dir: str | None = None) -> str:
     print(f"Starte Audiveris OMR: {pdf_path.name}")
     print(f"  Executable: {audiveris_bin}")
 
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=300,  # 5 Minuten Timeout
-        )
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+    )
 
-        if result.returncode != 0:
-            print(f"  Audiveris stderr: {result.stderr[:500]}")
-            raise RuntimeError(f"Audiveris Fehler (Code {result.returncode})")
-
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("Audiveris Timeout (>5 Minuten). PDF zu komplex?")
+    if result.returncode != 0:
+        print(f"  Audiveris stderr: {result.stderr[:500]}")
+        raise RuntimeError(f"Audiveris Fehler (Code {result.returncode})")
 
     # Ausgabe-Datei finden (.mxl)
     mxl_path = _find_output_mxl(output_dir, pdf_path.stem)

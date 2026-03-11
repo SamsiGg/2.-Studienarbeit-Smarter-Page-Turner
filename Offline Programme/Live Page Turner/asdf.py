@@ -1,7 +1,7 @@
 import mido, time
 
 available = mido.get_output_names()
-preferred = [p for p in available if 'Netzwerk' in p or 'Network' in p]
+preferred = [p for p in available if 'Bluetooth' in p or 'bluetooth' in p]
 port_name = preferred[0] if preferred else available[0]
 port = mido.open_output(port_name)
 print(f"Port: {port_name}")
