@@ -19,7 +19,8 @@ from utils.chroma_builder import build_chroma
 from utils.score_writer import write_score_data
 from utils.omr import convert_pdf
 
-OUTPUT_DIR = Path(__file__).parent.parent / "data" / "generated"
+SCORES_DIR   = Path(__file__).parent.parent / "data" / "scores"     # finale NPZ-Dateien
+GENERATED_DIR = Path(__file__).parent.parent / "data" / "generated"  # WAV + OMR-Zwischendateien
 
 MUSICXML_EXTENSIONS = {'.musicxml', '.mxl', '.xml'}
 PDF_EXTENSIONS = {'.pdf'}
@@ -36,7 +37,7 @@ def main():
     parser.add_argument("--instrument", type=str, default="violin",
                         help="Instrument (violin, piano, cello, flute, ... Standard: violin)")
     parser.add_argument("--output", type=str, default=None,
-                        help="Ausgabedatei (Standard: data/generated/<name>.npz)")
+                        help="Ausgabedatei (Standard: data/scores/<name>.npz)")
     args = parser.parse_args()
 
     input_path = Path(args.input_file)
@@ -62,12 +63,13 @@ def main():
         sys.exit(1)
 
     # 2. MusicXML → MIDI → FluidSynth → Chroma + Seitenumbrüche
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    SCORES_DIR.mkdir(parents=True, exist_ok=True)
+    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
     if args.output:
         output_path = Path(args.output)
     else:
-        output_path = OUTPUT_DIR / f"{input_path.stem}.npz"
-    wav_output_path = output_path.with_suffix(".wav")
+        output_path = SCORES_DIR / f"{input_path.stem}.npz"
+    wav_output_path = GENERATED_DIR / f"{input_path.stem}.wav"
 
     print(f"\n[2/3] Synthetisiere Audio und berechne Chroma")
     try:
@@ -89,8 +91,16 @@ def main():
                      musicxml_content=musicxml_content,
                      silence_mask=silence_mask)
 
+    total_frames = chroma.shape[1]
+    num_pages = len(page_indices) + 1
     print(f"\nFERTIG! {output_path}")
-    print(f"  Frames: {chroma.shape[1]}, Seiten: {len(page_indices) + 1}")
+    print(f"  Frames gesamt: {total_frames}, Seiten: {num_pages}")
+    print(f"  Seitenumbruch-Frames:")
+    prev = 0
+    for i, idx in enumerate(page_indices):
+        print(f"    Seite {i + 1} → {i + 2}: Frame {idx:6d}  ({prev} – {idx})")
+        prev = idx
+    print(f"    Seite {num_pages}:         Frames {prev} – {total_frames}")
 
 
 if __name__ == "__main__":

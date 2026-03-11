@@ -46,7 +46,7 @@ BEATS_PER_MEASURE = 4        # Taktart (4/4)
 SMOOTHING_WINDOW = 1         # Moving Average für Chroma (1 = aus)
 
 # --- Dateipfade ---
-SCORE_DATA_PATH = "/Users/samuelgeffert/Desktop/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/data/generated/Pachelbel_Musescore.npz"
+SCORE_DATA_PATH = "/Users/samuelgeffert/Desktop/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/data/scores/Pachelbel_Musescore.npz"
 
 # --- Network MIDI (Mac → iPad) ---
 USE_BLE_KEYBOARD = True      # True: Seitenumblättern via Network MIDI (WLAN)

@@ -21,6 +21,9 @@ from pathlib import Path
 _MAC_APP_EXECUTABLE = "/Applications/Audiveris.app/Contents/MacOS/Audiveris"
 
 
+_GENERATED_DIR = Path(__file__).parent.parent.parent / "data" / "generated"
+
+
 def convert_pdf(pdf_path: str, output_dir: str | None = None) -> str:
     """Konvertiert eine PDF-Datei zu MusicXML via Audiveris OMR.
 
@@ -40,7 +43,8 @@ def convert_pdf(pdf_path: str, output_dir: str | None = None) -> str:
         raise FileNotFoundError(f"PDF nicht gefunden: {pdf_path}")
 
     if output_dir is None:
-        output_dir = str(pdf_path.parent)
+        _GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+        output_dir = str(_GENERATED_DIR)
 
     # Audiveris-Executable finden
     audiveris_bin = _find_audiveris()

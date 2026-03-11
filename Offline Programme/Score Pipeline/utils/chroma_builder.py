@@ -11,6 +11,7 @@
 import os
 import subprocess
 import tempfile
+import xml.etree.ElementTree as ET
 import numpy as np
 import music21
 import librosa
@@ -72,13 +73,13 @@ def build_chroma(musicxml_path: str, bpm: int, instrument: str = "violin",
 
     # Tempo und Instrument erzwingen
     midi_program = INSTRUMENTS.get(instrument.lower(), 40)
-    _set_tempo_and_instrument(part, score, bpm, midi_program)
+    _set_tempo_and_instrument(part, bpm, midi_program)
 
     # Frames-per-Beat für Seitenumbrüche
     frames_per_beat = (60.0 / bpm) * (sample_rate / hop_length)
 
-    # Interaktive Seitenumbrüche (VOR Audio-Synthese, damit man die Partitur noch sieht)
-    page_indices = _get_interactive_page_turns(score, frames_per_beat)
+    # Seitenumbrüche aus MusicXML lesen (automatisch) oder interaktiv abfragen
+    page_indices = _get_page_turns_from_xml(musicxml_path, score, frames_per_beat)
 
     # MIDI exportieren → FluidSynth → WAV → Chroma
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -164,7 +165,7 @@ def _remove_grace_notes(part):
         print(f"  {len(grace_notes)} Grace Notes entfernt (verhindert stuck notes)")
 
 
-def _set_tempo_and_instrument(part, score, target_bpm: int, midi_program: int):
+def _set_tempo_and_instrument(part, target_bpm: int, midi_program: int):
     """Alle Tempo-Markierungen entfernen, neues Tempo und Instrument setzen."""
     # Alte Tempos entfernen
     try:
@@ -194,6 +195,86 @@ def _set_tempo_and_instrument(part, score, target_bpm: int, midi_program: int):
     new_inst = music21.instrument.Instrument()
     new_inst.midiProgram = midi_program
     part.insert(0, new_inst)
+
+
+def _get_page_turns_from_xml(musicxml_path: str, score, frames_per_beat: float) -> list[int]:
+    """Liest Seitenumbrüche automatisch aus MusicXML (<print new-page="yes"/>).
+
+    Findet alle Takte, die auf einer neuen Seite beginnen, und berechnet daraus
+    den Frame-Index des letzten Takts der vorherigen Seite.
+
+    Fällt auf interaktive Eingabe zurück wenn keine Seitenumbrüche gefunden.
+    """
+    # MXL (ZIP) auspacken falls nötig
+    xml_content = None
+    try:
+        import zipfile
+        if zipfile.is_zipfile(musicxml_path):
+            with zipfile.ZipFile(musicxml_path) as zf:
+                for name in zf.namelist():
+                    if name.endswith('.xml') and not name.startswith('__'):
+                        xml_content = zf.read(name).decode('utf-8', errors='replace')
+                        break
+    except Exception:
+        pass
+
+    if xml_content is None:
+        with open(musicxml_path, encoding='utf-8', errors='replace') as f:
+            xml_content = f.read()
+
+    # Alle Taktnummern finden, die eine neue Seite beginnen
+    try:
+        root = ET.fromstring(xml_content)
+        ns = root.tag.split('}')[0].lstrip('{') if '}' in root.tag else ''
+        prefix = f'{{{ns}}}' if ns else ''
+
+        new_page_measures = []
+        for measure in root.iter(f'{prefix}measure'):
+            for print_el in measure.findall(f'{prefix}print'):
+                if print_el.get('new-page') == 'yes':
+                    try:
+                        new_page_measures.append(int(measure.get('number', 0)))
+                    except ValueError:
+                        pass
+    except ET.ParseError:
+        new_page_measures = []
+
+    if not new_page_measures:
+        print("  Keine Seitenumbrüche in MusicXML gefunden → manuelle Eingabe.")
+        return _get_interactive_page_turns(score, frames_per_beat)
+
+    # Letzte Taktnummer der Seite = Takt VOR dem nächsten new-page-Takt
+    part = score.parts[0]
+    all_measures = [m for m in part.recurse() if 'Measure' in m.classes]
+    measure_map = {m.number: m for m in all_measures}
+
+    # Seitenumbrüche berechnen und anzeigen
+    page_indices = []
+    last_measures = []
+    for page_start_num in new_page_measures:
+        last_measure_num = page_start_num - 1
+        m = measure_map.get(last_measure_num)
+        if m is None:
+            print(f"  WARNUNG: Takt {last_measure_num} nicht gefunden, übersprungen.")
+            continue
+        abs_offset = m.getOffsetInHierarchy(score)
+        end_beat = abs_offset + m.duration.quarterLength
+        frame_index = int(end_beat * frames_per_beat)
+        page_indices.append(frame_index)
+        last_measures.append(last_measure_num)
+
+    print(f"\n--- ERKANNTE SEITENUMBRÜCHE ({len(page_indices)} Stück) ---")
+    for i, (measure_num, frame_idx) in enumerate(zip(last_measures, page_indices)):
+        print(f"  Seite {i + 1} → {i + 2}:  letzter Takt = {measure_num:4d}  (Frame {frame_idx})")
+    print()
+
+    confirm = input("Are these page breaks correct? [y/n]: ").strip().lower()
+    if confirm == 'y':
+        print(f"  OK – {len(page_indices)} page breaks accepted.\n")
+        return page_indices
+
+    print("  Starting manual input.")
+    return _get_interactive_page_turns(score, frames_per_beat)
 
 
 def _get_interactive_page_turns(score, frames_per_beat: float) -> list[int]:
