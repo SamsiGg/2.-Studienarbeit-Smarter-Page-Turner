@@ -22,7 +22,7 @@ BPM = 35
 BEATS_PER_MEASURE = 4
 
 # Welche Takte vergleichen? (5 Stück)
-COMPARE_MEASURES = [18, 19, 20, 21, 22]
+COMPARE_MEASURES = [50, 51, 52, 53, 54]
 #COMPARE_MEASURES = [20, 21, 22, 23, 24]
 
 CHROMA_LABELS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']

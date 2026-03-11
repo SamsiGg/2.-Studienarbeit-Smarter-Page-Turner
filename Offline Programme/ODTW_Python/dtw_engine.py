@@ -10,9 +10,9 @@ SAMPLE_RATE = 44100  # Weniger reicht oft für Chroma und spart Rechenleistung
 BLOCK_SIZE = 4096     # Größe des Audio-Schnipsels (Latzenz vs. Genauigkeit)
 SEARCH_WINDOW = 200    # Suchradius: Wir suchen nur +/- 200 Frames um die letzte Position
 HOP_LENGTH = 512     # Wie viel wir im Fenster weiter springen (Overlap)
-DAMPING_FACTOR = 0.96  # Dämpfungsfaktor für alte Kosten
-WAIT_PENALTY = 0.3    # Strafe fürs Stehenbleiben
-SKIP_PENALTY = 0.15      # Strafe für zu weite - erstmal hohe Strafe
+DAMPING_FACTOR = 0.99  # Dämpfungsfaktor für alte Kosten
+WAIT_PENALTY = 0.1    # Strafe fürs Stehenbleiben
+SKIP_PENALTY = 0.03      # Strafe für zu weite - erstmal hohe Strafe
 BPM = 40
 BEATS_PER_MEASURE = 4
 SMOOTHING_WINDOW = 1 # Anzahl Frames für Moving Average (1 = aus)
