@@ -39,7 +39,7 @@ START_THRESHOLD_RMS = 0.01   # RMS-Schwelle zum Starten (Teensy: START_THRESHOLD
 SILENCE_FRAMES_BEFORE_SLEEP = 500  # Aufeinanderfolgende leise Frames → Sleep (~0.6s bei 512/44100)
 
 # --- Musikalischer Kontext ---
-BPM = 35                     # Tempo des Stücks
+BPM = 40                     # Tempo des Stücks
 BEATS_PER_MEASURE = 4        # Taktart (4/4)
 
 # --- Glättung ---

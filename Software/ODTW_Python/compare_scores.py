@@ -13,8 +13,8 @@ import librosa
 import matplotlib.pyplot as plt
 
 # --- KONFIGURATION ---
-SCORE_FILE = "/Users/samuelgeffert/Desktop/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/data/scores/Pachelbel_Musescore.npz"
-LIVE_WAV_FILE = "/Users/samuelgeffert/Desktop/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/data/audio/Pachelbel-Live-35bpm.wav"
+SCORE_FILE = "/Users/samuelgeffert/Documents/Programmieren/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/data/scores/Pachelbel_Musescore.npz"
+LIVE_WAV_FILE = "/Users/samuelgeffert/Documents/Programmieren/GitHub/2.-Studienarbeit-Smarter-Page-Turner/Offline Programme/data/audio/Pachelbel-Live-35bpm.wav"
 
 SAMPLE_RATE = 44100
 HOP_LENGTH = 512

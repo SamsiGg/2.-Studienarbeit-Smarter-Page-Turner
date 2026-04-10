@@ -92,6 +92,13 @@ class AudioProcessingThread(threading.Thread):
         ring_buffer = AudioRingBuffer(settings.BLOCK_SIZE)
         extractor = ChromaExtractor(settings.SAMPLE_RATE, settings.BLOCK_SIZE)
 
+        # Latenz-Statistik
+        BUDGET_MS = settings.HOP_LENGTH / settings.SAMPLE_RATE * 1000  # ~11.6 ms
+        LOG_INTERVAL = 200   # Frames zwischen Terminal-Ausgaben
+        t_chroma_list: list[float] = []
+        t_odtw_list:   list[float] = []
+        frame_count = 0
+
         try:
             with sd.InputStream(
                 channels=1,
@@ -99,7 +106,7 @@ class AudioProcessingThread(threading.Thread):
                 blocksize=settings.HOP_LENGTH,
                 dtype='float32',
             ) as stream:
-                print("[Audio] Stream gestartet.")
+                print(f"[Audio] Stream gestartet.  Budget pro Frame: {BUDGET_MS:.1f} ms")
 
                 while not self.stop_event.is_set():
                     # 1. Audio lesen (512 Samples ~ 11ms)
@@ -114,10 +121,33 @@ class AudioProcessingThread(threading.Thread):
                     # 3. Chroma aus vollem Buffer berechnen
                     audio_buf = ring_buffer.get()
                     rms = extractor.compute_rms(audio_buf)
+                    t0 = time.perf_counter()
                     chroma_vec = extractor.extract(audio_buf)
+                    t_chroma_list.append((time.perf_counter() - t0) * 1000)
 
                     # 4. ODTW-Schritt
+                    t0 = time.perf_counter()
                     state = self.tracker.step(chroma_vec, rms)
+                    t_odtw_list.append((time.perf_counter() - t0) * 1000)
+
+                    frame_count += 1
+
+                    # Latenz-Log alle LOG_INTERVAL Frames
+                    if frame_count % LOG_INTERVAL == 0:
+                        c_mean = sum(t_chroma_list) / len(t_chroma_list)
+                        c_max  = max(t_chroma_list)
+                        o_mean = sum(t_odtw_list)   / len(t_odtw_list)
+                        o_max  = max(t_odtw_list)
+                        total_mean = c_mean + o_mean
+                        warn = " ⚠ ÜBERSCHREITUNG" if total_mean > BUDGET_MS else ""
+                        print(
+                            f"[Latenz] Frame {frame_count:5d} | "
+                            f"Chroma: {c_mean:5.2f} ms (max {c_max:5.2f}) | "
+                            f"ODTW: {o_mean:5.2f} ms (max {o_max:5.2f}) | "
+                            f"Gesamt: {total_mean:5.2f} / {BUDGET_MS:.1f} ms{warn}"
+                        )
+                        t_chroma_list.clear()
+                        t_odtw_list.clear()
 
                     # 5. State in Queue (älteste verwerfen wenn voll)
                     try:
@@ -137,7 +167,11 @@ class AudioProcessingThread(threading.Thread):
         except Exception as e:
             print(f"[Audio] FEHLER: {e}")
 
-        print("[Audio] Thread beendet.")
+        # Abschluss-Statistik
+        if frame_count > 0:
+            print(f"[Audio] Thread beendet nach {frame_count} Frames.")
+        else:
+            print("[Audio] Thread beendet.")
 
 
 # =============================================================================
@@ -164,6 +198,7 @@ class PageTurnerGUI:
         # Stabilitäts-Timer: letzter Zeitpunkt von Recovery/Jump
         # 0.0 → Bedingung sofort erfüllt wenn kein Recovery stattfand
         self._last_jump_time = 0.0
+        self._last_page_turn_time = 0.0
 
         self._build_ui()
 
@@ -567,14 +602,19 @@ class PageTurnerGUI:
             self._last_jump_time = time.time()
             self._flash_recovery(state.measure)
 
-        # Page Turn Flash + MIDI Signal (nur wenn lange genug stabil)
+        # Page Turn Flash + MIDI Signal (nur wenn lange genug stabil und nicht zu oft)
         if state.page_turn_triggered:
             stable_since = time.time() - self._last_jump_time
-            if stable_since >= settings.PAGE_TURN_STABLE_TIME:
+            since_last_turn = time.time() - self._last_page_turn_time
+            if stable_since >= settings.PAGE_TURN_STABLE_TIME and since_last_turn >= 1.0:
+                self._last_page_turn_time = time.time()
                 self._flash_page_turn(state.page_turn_target)
                 if self.ble and self.ble.is_connected:
                     threading.Thread(target=self.ble.send_page_down,
                                      daemon=True).start()
+            elif since_last_turn < 1.0:
+                print(f"[MIDI] Seitenumblättern blockiert – zu kurz nach letztem Blättern "
+                      f"({since_last_turn:.1f}s < 1.0s)")
             else:
                 remaining = settings.PAGE_TURN_STABLE_TIME - stable_since
                 print(f"[MIDI] Seitenumblättern blockiert – "
