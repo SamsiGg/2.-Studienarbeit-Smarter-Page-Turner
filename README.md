@@ -1,6 +1,6 @@
 # Smarter Page Turner
 
-Automatisches Notenblatt-Umblättern per Musikerkennung — entwickelt als Studienarbeit an der Hochschule Offenburg (2026).
+Automatisches Notenblatt-Umblättern per Musikerkennung — entwickelt als Studienarbeit an der DHBW Mannheim (2026).
 
 Die vollständige wissenschaftliche Ausarbeitung ist hier im Repository enthalten:
 **[Geffert, Samuel_4203964_Studienarbeit 6. Semester.pdf](Geffert,%20Samuel_4203964_Studienarbeit%206.%20Semester.pdf)**
@@ -64,4 +64,4 @@ python main.py --score ../data/scores/mein_stueck.npz
 
 ---
 
-Samuel Geffert · Hochschule Offenburg · 2026
+Samuel Geffert · DHBW Mannheim · 2026
